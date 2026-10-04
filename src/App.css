@@ -1,4 +1,4 @@
-:root {
+﻿:root {
 
 
 
@@ -7458,15 +7458,15 @@ a {
 
 
 
-  \\\*,
+*,
 
 
 
-  \\\*::before,
+*::before,
 
 
 
-  \\\*::after {
+*::after {
 
 
 
@@ -7482,15 +7482,15 @@ a {
 
 
 
-/\* =========================================================
+/* =========================================================
 
-   NUMBER LAB — PHASE 1 VISUAL RESTRUCTURE
+   NUMBER LAB â€” PHASE 1 VISUAL RESTRUCTURE
 
    Scoped exclusively to .number-lab-page so the other game
 
    routes keep the existing styling and layout.
 
-   ========================================================= \*/
+   ========================================================= */
 
 
 
@@ -7812,7 +7812,7 @@ a {
 
 
 
-/\* Remove Number Lab-only duplicate metadata without touching games. \*/
+/* Remove Number Lab-only duplicate metadata without touching games. */
 
 .number-lab-page .lab-topline,
 
@@ -8050,11 +8050,11 @@ a {
 
 
 
-/\* =========================================================
+/* =========================================================
 
-   PHASE 2 — HEADER LEARNING MENU + SPEED PRESETS
+   PHASE 2 â€” HEADER LEARNING MENU + SPEED PRESETS
 
-   ========================================================= \*/
+   ========================================================= */
 
 
 
@@ -8142,15 +8142,15 @@ a {
 
 
 
-/\* =========================================================
+/* =========================================================
 
-   PHASE 3 — CLEAN NUMBER LAB HEADER CONTROLS
+   PHASE 3 â€” CLEAN NUMBER LAB HEADER CONTROLS
 
    Scoped to Number Lab where possible.
 
    Other game pages retain their existing layout.
 
-   ========================================================= \*/
+   ========================================================= */
 
 
 
@@ -8376,7 +8376,7 @@ a {
 
 
 
-/\* Header controls used only by Number Lab. \*/
+/* Header controls used only by Number Lab. */
 
 .number-lab-page .site-header {
 
@@ -8863,7 +8863,7 @@ a {
 }
 
 /* =========================================================
-   GAME PAGE POLISH — SCORE RAIL + RESPONSIVE TYPOGRAPHY
+   GAME PAGE POLISH â€” SCORE RAIL + RESPONSIVE TYPOGRAPHY
    ========================================================= */
 
 .game-page {
@@ -9213,4 +9213,6 @@ a {
     font-size: 8px;
   }
 }
+
+
 
