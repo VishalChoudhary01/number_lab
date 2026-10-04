@@ -1,4 +1,4 @@
-# Indian Number Teacher
+# Indian Number Place value Game
 
 A polished Vite + React learning game for teaching children the Indian number system: Ones, Tens, Hundreds, Thousands, Lakhs and Crores.
 
