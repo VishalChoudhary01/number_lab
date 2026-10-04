@@ -6,9 +6,10 @@ import "./App.css";
 
 const MIN = 0;
 const MAX = 99999999;
-const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2];
-const DEFAULT_SPEED = 0.5;
+const SPEEDS = [1, 5, 10, 15, 20, 30];
+const DEFAULT_SPEED = 1;
 const DEFAULT_SPEECH_RATE = 0.78;
+const EASE = [0.22, 1, 0.36, 1];
 const PLACE_META = [
   { key: "ones", label: "Ones", hindi: "इकाई", multiplier: 1, colorClass: "place-blue" },
   { key: "tens", label: "Tens", hindi: "दहाई", multiplier: 10, colorClass: "place-green" },
@@ -143,8 +144,10 @@ function getChangedPlaces(previous, next) {
   const b = getDigits(next);
   const changed = [];
   if (a.crore !== b.crore) changed.push("Crore");
-  if (a.lakhTens !== b.lakhTens || a.lakhOnes !== b.lakhOnes) changed.push("Lakh");
-  if (a.thousandTens !== b.thousandTens || a.thousandOnes !== b.thousandOnes) changed.push("Thousand");
+  if (a.lakhTens !== b.lakhTens) changed.push("Ten Lakh");
+  if (a.lakhOnes !== b.lakhOnes) changed.push("Lakh");
+  if (a.thousandTens !== b.thousandTens) changed.push("Ten Thousand");
+  if (a.thousandOnes !== b.thousandOnes) changed.push("Thousand");
   if (a.hundreds !== b.hundreds) changed.push("Hundreds");
   if (a.tens !== b.tens) changed.push("Tens");
   if (a.ones !== b.ones) changed.push("Ones");
@@ -172,12 +175,21 @@ function getLesson(previous, next) {
 }
 
 function getSpeedLabel(speed) {
-  if (speed <= 0.25) return "Snail";
-  if (speed <= 0.5) return "Very Slow";
-  if (speed <= 0.75) return "Slow";
-  if (speed <= 1) return "Normal";
-  if (speed <= 1.5) return "Fast";
-  return "Very Fast";
+  if (speed === 1) return "Normal";
+  if (speed === 5) return "5×";
+  if (speed === 10) return "10×";
+  if (speed === 15) return "15×";
+  if (speed === 20) return "20×";
+  return "Rapid";
+}
+
+function getRollDuration(speed) {
+  if (speed === 1) return 0.72;
+  if (speed === 5) return 0.3;
+  if (speed === 10) return 0.18;
+  if (speed === 15) return 0.12;
+  if (speed === 20) return 0.08;
+  return 0.045;
 }
 
 function getModeTitle(mode) {
@@ -217,7 +229,7 @@ function getDifficultyRange(difficulty) {
   return ranges[difficulty] || ranges.mixed;
 }
 
-function getPlaceValueQuestion(number) {
+function getPlaceValueQuestion(number, language = "en") {
   const candidates = PLACE_META.filter((place) => place.multiplier <= number || place.key === "ones");
   const place = candidates[getRandomNumber(0, candidates.length - 1)];
   const digit = Math.floor(number / place.multiplier) % 10;
@@ -226,7 +238,7 @@ function getPlaceValueQuestion(number) {
     targetPlace: place.label,
     targetValue: digit * place.multiplier,
     targetDigit: digit,
-    prompt: `What is the value of ${digit} in ${formatIndian(number)}?`,
+    prompt: language === "hi" ? `${formatIndian(number)} में ${digit} का स्थान-मूल्य क्या है?` : `What is the value of ${digit} in ${formatIndian(number)}?`,
     options: Array.from(new Set([
       digit * place.multiplier,
       Math.max(0, digit * Math.max(1, place.multiplier / 10)),
@@ -262,7 +274,7 @@ function createQuestion(mode, language, difficulty) {
   }
 
   if (mode === "place-value") {
-    const question = getPlaceValueQuestion(baseNumber);
+    const question = getPlaceValueQuestion(baseNumber, language);
     return {
       type: mode,
       ...question,
@@ -288,7 +300,7 @@ function createQuestion(mode, language, difficulty) {
     return {
       type: mode,
       number: baseNumber,
-      prompt: `Which place contains the digit ${digit}?`,
+      prompt: language === "hi" ? `अंक ${digit} किस स्थान पर है?` : `Which place contains the digit ${digit}?`,
       display: formatIndian(baseNumber),
       answer: place,
       options: options.sort(() => Math.random() - 0.5),
@@ -338,7 +350,7 @@ function createQuestion(mode, language, difficulty) {
     return {
       type: mode,
       display: unique,
-      prompt: "Tap the numbers from smallest to largest.",
+      prompt: language === "hi" ? "संख्याओं को छोटी से बड़ी क्रम में चुनें।" : "Tap the numbers from smallest to largest.",
       answer: sorted,
       selected: [],
     };
@@ -351,7 +363,7 @@ function createQuestion(mode, language, difficulty) {
     return {
       type: mode,
       display: [left, right],
-      prompt: "Which sign makes the statement correct?",
+      prompt: language === "hi" ? "सही चिन्ह चुनें।" : "Which sign makes the statement correct?",
       answer,
       options: ["<", ">", "="],
     };
@@ -361,7 +373,7 @@ function createQuestion(mode, language, difficulty) {
     type: "hear-type",
     number: baseNumber,
     display: words,
-    prompt: "Listen, then type the number in digits.",
+    prompt: language === "hi" ? "सुनें और संख्या अंकों में लिखें।" : "Listen, then type the number in digits.",
     answer: baseNumber,
   };
 }
@@ -433,40 +445,60 @@ function DigitRoll({ digit, direction, duration, reducedMotion }) {
   );
 }
 
-function NumberDisplay({ value, direction, speed, reducedMotion }) {
-  const digits = getDigits(value);
-  const duration = Math.max(0.28, 0.95 / speed);
+function PlaceDigit({ label, digit, colorClass, active, direction, duration, reducedMotion }) {
   return (
-    <div className="main-number" aria-live="polite" aria-label={`${formatIndian(value)}, ${indianNumberToWords(value)}`}>
-      <Group label="Crore" active={digits.crore > 0} color="red">
-        <DigitRoll digit={digits.crore} direction={direction} duration={duration} reducedMotion={reducedMotion} />
-      </Group>
-      <Separator />
-      <Group label="Lakh" active={digits.lakhTens > 0 || digits.lakhOnes > 0} color="pink">
-        <DigitRoll digit={digits.lakhTens} direction={direction} duration={duration} reducedMotion={reducedMotion} />
-        <DigitRoll digit={digits.lakhOnes} direction={direction} duration={duration} reducedMotion={reducedMotion} />
-      </Group>
-      <Separator />
-      <Group label="Thousand" active={digits.thousandTens > 0 || digits.thousandOnes > 0} color="purple">
-        <DigitRoll digit={digits.thousandTens} direction={direction} duration={duration} reducedMotion={reducedMotion} />
-        <DigitRoll digit={digits.thousandOnes} direction={direction} duration={duration} reducedMotion={reducedMotion} />
-      </Group>
-      <Separator />
-      <Group label="H · T · O" active={digits.hundreds > 0 || digits.tens > 0 || digits.ones > 0} color="amber">
-        <DigitRoll digit={digits.hundreds} direction={direction} duration={duration} reducedMotion={reducedMotion} />
-        <DigitRoll digit={digits.tens} direction={direction} duration={duration} reducedMotion={reducedMotion} />
-        <DigitRoll digit={digits.ones} direction={direction} duration={duration} reducedMotion={reducedMotion} />
-      </Group>
-    </div>
+    <motion.div
+      className={`place-digit ${colorClass}${active ? " active" : ""}`}
+      animate={active ? { y: -3 } : { y: 0 }}
+      transition={{ duration: 0.2, ease: EASE }}
+    >
+      <span className="place-digit-label">{label}</span>
+      <DigitRoll
+        digit={digit}
+        direction={direction}
+        duration={duration}
+        reducedMotion={reducedMotion}
+      />
+    </motion.div>
   );
 }
 
-function Group({ label, children, active, color }) {
+function NumberDisplay({ value, previousValue, direction, speed, reducedMotion }) {
+  const digits = getDigits(value);
+  const previousDigits = getDigits(previousValue);
+  const duration = getRollDuration(speed);
+  const places = [
+    { key: "crore", label: "Crore", value: digits.crore, previous: previousDigits.crore, colorClass: "place-red" },
+    { key: "tenLakh", label: "Ten Lakh", value: digits.lakhTens, previous: previousDigits.lakhTens, colorClass: "place-rose" },
+    { key: "lakh", label: "Lakh", value: digits.lakhOnes, previous: previousDigits.lakhOnes, colorClass: "place-pink" },
+    { key: "tenThousand", label: "Ten Thousand", value: digits.thousandTens, previous: previousDigits.thousandTens, colorClass: "place-violet" },
+    { key: "thousand", label: "Thousand", value: digits.thousandOnes, previous: previousDigits.thousandOnes, colorClass: "place-purple" },
+    { key: "hundreds", label: "Hundreds", value: digits.hundreds, previous: previousDigits.hundreds, colorClass: "place-amber" },
+    { key: "tens", label: "Tens", value: digits.tens, previous: previousDigits.tens, colorClass: "place-green" },
+    { key: "ones", label: "Ones", value: digits.ones, previous: previousDigits.ones, colorClass: "place-blue" },
+  ];
+
   return (
-    <motion.div className={`number-group group-${color}${active ? " active" : ""}`} animate={{ y: active ? -2 : 0 }} transition={{ duration: 0.2 }}>
-      <div className="group-label">{label}</div>
-      <div className="group-digits">{children}</div>
-    </motion.div>
+    <div
+      className="main-number"
+      aria-live="polite"
+      aria-label={`${formatIndian(value)}, ${indianNumberToWords(value)}`}
+    >
+      {places.map((place, index) => (
+        <span className="number-unit" key={place.key}>
+          <PlaceDigit
+            label={place.label}
+            digit={place.value}
+            colorClass={place.colorClass}
+            active={place.value !== place.previous}
+            direction={direction}
+            duration={duration}
+            reducedMotion={reducedMotion}
+          />
+          {index === 0 || index === 2 || index === 4 ? <Separator /> : null}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -474,50 +506,279 @@ function Separator() {
   return <div className="group-separator">,</div>;
 }
 
-function Header({ language, setLanguage }) {
+function Header({
+  language,
+  setLanguage,
+  showLabSettings = false,
+  speed = DEFAULT_SPEED,
+  setSpeed = () => {},
+  speechRate = DEFAULT_SPEECH_RATE,
+  setSpeechRate = () => {},
+  voiceName = "",
+  setVoiceName = () => {},
+  voices = [],
+}) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  const [openMenu, setOpenMenu] = useState(null);
+  const gameRef = useRef(null);
+  const controlsRef = useRef(null);
+
+  useEffect(() => {
+    if (!openMenu) return undefined;
+
+    const handlePointerDown = (event) => {
+      const inGame = gameRef.current?.contains(event.target);
+      const inControls = controlsRef.current?.contains(event.target);
+
+      if (!inGame && !inControls) {
+        setOpenMenu(null);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpenMenu(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openMenu]);
+
+  const navigateTo = (path) => {
+    navigate(path);
+    setOpenMenu(null);
+  };
+
   const isGame = location.pathname.startsWith("/game");
-  const gameItems = GAME_ITEMS;
+  const ui = getUiCopy(language);
+  const localizedItems = getLocalizedGameItems(language);
 
   return (
     <header className="site-header">
-      <Link to="/" className="brand-lockup" onClick={() => setOpen(false)}>
+      <Link
+        to="/"
+        className="brand-lockup"
+        onClick={() => setOpenMenu(null)}
+      >
         <span className="brand-mark">N</span>
         <span>
           <span className="brand-name">Number Lab</span>
           <span className="brand-meta">Indian Number System</span>
         </span>
       </Link>
+
       <div className="header-actions">
-        <div className="dropdown-wrap">
-          <button className="menu-button" onClick={() => setOpen((current) => !current)} aria-expanded={open}>
-            <span>Game</span>
-            <span className="chevron">⌄</span>
+        <div className="dropdown-wrap" ref={gameRef}>
+          <button
+            type="button"
+            className={`menu-button${openMenu === "game" ? " open" : ""}`}
+            onClick={() =>
+              setOpenMenu((current) =>
+                current === "game" ? null : "game"
+              )
+            }
+            aria-expanded={openMenu === "game"}
+            aria-haspopup="menu"
+          >
+            <span>{ui.game}</span>
+            <span className={`chevron${openMenu === "game" ? " open" : ""}`}>
+              ⌄
+            </span>
           </button>
+
           <AnimatePresence>
-            {open && (
-              <motion.div className="dropdown-menu" initial={{ opacity: 0, y: -7 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -7 }} transition={{ duration: 0.16 }}>
-                <div className="menu-title">Practice</div>
-                {gameItems.map(([path, title, hint]) => (
-                  <button key={path} className={`menu-item${location.pathname === path ? " selected" : ""}`} onClick={() => { navigate(path); setOpen(false); }}>
-                    <span><strong>{title}</strong><small>{hint}</small></span>
-                    {location.pathname === path ? <span className="check">✓</span> : null}
+            {openMenu === "game" ? (
+              <motion.div
+                className="dropdown-menu game-menu"
+                initial={{ opacity: 0, y: -7, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -7, scale: 0.985 }}
+                transition={{ duration: 0.16, ease: EASE }}
+                role="menu"
+              >
+                <div className="menu-title">{ui.practice}</div>
+
+                {localizedItems.map(([path, title, hint]) => (
+                  <button
+                    key={path}
+                    type="button"
+                    role="menuitem"
+                    className={`menu-item${
+                      location.pathname === path ? " selected" : ""
+                    }`}
+                    onClick={() => navigateTo(path)}
+                  >
+                    <span>
+                      <strong>{title}</strong>
+                      <small>{hint}</small>
+                    </span>
+
+                    {location.pathname === path ? (
+                      <span className="check">✓</span>
+                    ) : null}
                   </button>
                 ))}
+
                 <div className="menu-divider" />
-                <button className={`menu-item${!isGame ? " selected" : ""}`} onClick={() => { navigate("/"); setOpen(false); }}>
-                  <span><strong>Number Lab</strong><small>Learn place value</small></span>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`menu-item${!isGame ? " selected" : ""}`}
+                  onClick={() => navigateTo("/")}
+                >
+                  <span>
+                    <strong>{ui.numberLab}</strong>
+                    <small>{ui.learnPlaceValue}</small>
+                  </span>
+
+                  {!isGame ? <span className="check">✓</span> : null}
                 </button>
               </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
         </div>
-        <div className="language-switch" aria-label="Language">
-          <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>EN</button>
-          <button className={language === "hi" ? "active" : ""} onClick={() => setLanguage("hi")}>हिं</button>
-        </div>
+
+        {showLabSettings ? (
+          <div className="dropdown-wrap" ref={controlsRef}>
+            <button
+              type="button"
+              className={`menu-button${openMenu === "controls" ? " open" : ""}`}
+              onClick={() =>
+                setOpenMenu((current) =>
+                  current === "controls" ? null : "controls"
+                )
+              }
+              aria-expanded={openMenu === "controls"}
+              aria-haspopup="dialog"
+            >
+              <span>{ui.controls}</span>
+              <span className={`chevron${openMenu === "controls" ? " open" : ""}`}>
+                ⌄
+              </span>
+            </button>
+
+            <AnimatePresence>
+              {openMenu === "controls" ? (
+                <motion.div
+                  className="dropdown-menu settings-menu"
+                  initial={{ opacity: 0, y: -7, scale: 0.985 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -7, scale: 0.985 }}
+                  transition={{ duration: 0.16, ease: EASE }}
+                  role="dialog"
+                  aria-label="Number Lab controls"
+                >
+                  <div className="settings-section">
+                    <div className="menu-title">{ui.language}</div>
+
+                    <div className="settings-segmented">
+                      <button
+                        type="button"
+                        className={language === "en" ? "active" : ""}
+                        onClick={() => setLanguage("en")}
+                      >
+                        English
+                      </button>
+
+                      <button
+                        type="button"
+                        className={language === "hi" ? "active" : ""}
+                        onClick={() => setLanguage("hi")}
+                      >
+                        हिंदी
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="settings-divider" />
+
+                  <div className="settings-section">
+                    <div className="menu-title">{language === "hi" ? "एनीमेशन गति" : "Animation Speed"}</div>
+
+                    <div className="speed-options">
+                      {SPEEDS.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className={speed === option ? "active" : ""}
+                          onClick={() => setSpeed(option)}
+                        >
+                          {getSpeedLabel(option)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="settings-divider" />
+
+                  <div className="settings-section">
+                    <div className="menu-title">{ui.voice}</div>
+
+                    <select
+                      value={voiceName}
+                      onChange={(event) => setVoiceName(event.target.value)}
+                      aria-label="Voice"
+                    >
+                      <option value="">{ui.browserDefault}</option>
+                      {voices.map((voice) => (
+                        <option
+                          key={`${voice.name}-${voice.lang}`}
+                          value={voice.name}
+                        >
+                          {voice.name} · {voice.lang}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="speech-row">
+                      <span>Speech</span>
+
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="1.25"
+                        step="0.05"
+                        value={speechRate}
+                        onChange={(event) =>
+                          setSpeechRate(Number(event.target.value))
+                        }
+                        aria-label="Speech speed"
+                      />
+
+                      <b>{speechRate.toFixed(2)}×</b>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        ) : (
+          <div className="language-switch" aria-label="Language">
+            <button
+              type="button"
+              className={language === "en" ? "active" : ""}
+              onClick={() => setLanguage("en")}
+            >
+              EN
+            </button>
+
+            <button
+              type="button"
+              className={language === "hi" ? "active" : ""}
+              onClick={() => setLanguage("hi")}
+            >
+              हिं
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );
@@ -641,48 +902,137 @@ function NumberLab() {
   const [speed, setSpeed] = useState(DEFAULT_SPEED);
   const [language, setLanguage] = useState("en");
   const [speechRate, setSpeechRate] = useState(DEFAULT_SPEECH_RATE);
-  const [mode, setMode] = useState("place");
+  const [voiceName, setVoiceName] = useState("");
+  const [voices, setVoices] = useState([]);
   const [changedPlaces, setChangedPlaces] = useState([]);
   const [message, setMessage] = useState("Start at zero");
   const [previousValue, setPreviousValue] = useState(0);
 
   const timerRef = useRef(null);
+  const highlightTimerRef = useRef(null);
   const valueRef = useRef(0);
-  const runningRef = useRef(false);
 
-  const words = language === "hi" ? indianNumberToHindiWords(value) : indianNumberToWords(value);
-  const delay = Math.max(850, 2200 / speed);
+  const words =
+    language === "hi"
+      ? indianNumberToHindiWords(value)
+      : indianNumberToWords(value);
 
-  useEffect(() => { valueRef.current = value; }, [value]);
-  useEffect(() => { runningRef.current = running; }, [running]);
-  useEffect(() => () => clearTimeout(timerRef.current), []);
+  const delay = Math.max(90, 1600 / speed);
 
-  const step = useCallback((nextDirection) => {
-    const current = valueRef.current;
-    const target = nextDirection === "next" ? current + 1 : current - 1;
-    if (target < MIN || target > MAX) return;
-    setDirection(nextDirection);
-    setPreviousValue(current);
-    setChangedPlaces(getChangedPlaces(current, target));
-    setMessage(getLesson(current, target));
-    valueRef.current = target;
-    setValue(target);
-    window.setTimeout(() => setChangedPlaces([]), reducedMotion ? 0 : Math.max(260, 760 / speed));
-  }, [reducedMotion, speed]);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    const load = () => {
+      const available = window.speechSynthesis?.getVoices?.() || [];
+      setVoices(available);
+    };
+
+    load();
+    window.speechSynthesis?.addEventListener("voiceschanged", load);
+
+    return () => {
+      window.speechSynthesis?.removeEventListener("voiceschanged", load);
+      window.speechSynthesis?.cancel();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(timerRef.current);
+      clearTimeout(highlightTimerRef.current);
+      window.speechSynthesis?.cancel();
+    };
+  }, []);
+
+  useEffect(() => {
+    const prefix = language === "hi" ? "hi" : "en";
+    const current = voices.find((voice) => voice.name === voiceName);
+
+    if (
+      !current ||
+      !current.lang?.toLowerCase().startsWith(prefix)
+    ) {
+      const preferred =
+        voices.find(
+          (voice) =>
+            voice.lang?.toLowerCase() === `${prefix}-in`
+        ) ||
+        voices.find((voice) =>
+          voice.lang?.toLowerCase().startsWith(prefix)
+        );
+
+      setVoiceName(preferred?.name || "");
+    }
+  }, [language, voiceName, voices]);
+
+  const speakCurrentNumber = useCallback(() => {
+    if (!window.speechSynthesis) return;
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(words);
+    const selected = voices.find((voice) => voice.name === voiceName);
+
+    if (selected) {
+      utterance.voice = selected;
+    }
+
+    utterance.lang =
+      selected?.lang ||
+      (language === "hi" ? "hi-IN" : "en-IN");
+
+    utterance.rate = speechRate;
+    utterance.pitch = 1;
+
+    window.speechSynthesis.speak(utterance);
+  }, [language, speechRate, voiceName, voices, words]);
+
+  const step = useCallback(
+    (nextDirection) => {
+      const current = valueRef.current;
+      const target =
+        nextDirection === "next"
+          ? current + 1
+          : current - 1;
+
+      if (target < MIN || target > MAX) return;
+
+      setDirection(nextDirection);
+      setPreviousValue(current);
+      setChangedPlaces(
+        getChangedPlaces(current, target)
+      );
+      setMessage(getLesson(current, target));
+
+      valueRef.current = target;
+      setValue(target);
+
+      clearTimeout(highlightTimerRef.current);
+
+      highlightTimerRef.current = window.setTimeout(
+        () => setChangedPlaces([]),
+        reducedMotion ? 0 : Math.max(180, 700 / speed)
+      );
+    },
+    [reducedMotion, speed],
+  );
 
   useEffect(() => {
     clearTimeout(timerRef.current);
+
     if (!running) return undefined;
+
     if (valueRef.current >= MAX) {
       setRunning(false);
       return undefined;
     }
+
     timerRef.current = window.setTimeout(() => {
       step("next");
-      if (runningRef.current) {
-        setRunning(true);
-      }
     }, delay);
+
     return () => clearTimeout(timerRef.current);
   }, [running, value, delay, step]);
 
@@ -690,75 +1040,131 @@ function NumberLab() {
     if (valueRef.current >= MAX) return;
     setRunning(true);
   };
+
   const stop = () => {
     clearTimeout(timerRef.current);
     setRunning(false);
   };
+
   const reset = () => {
     stop();
+    clearTimeout(highlightTimerRef.current);
+    window.speechSynthesis?.cancel();
     valueRef.current = 0;
     setValue(0);
     setPreviousValue(0);
     setChangedPlaces([]);
     setMessage("Start at zero");
+    setDirection("next");
   };
 
   return (
-    <div className="page">
-      <Header language={language} setLanguage={setLanguage} />
+    <div className="page number-lab-page">
+      <Header
+        language={language}
+                showLabSettings
+        speed={speed}
+        setSpeed={setSpeed}
+        speechRate={speechRate}
+        setSpeechRate={setSpeechRate}
+        voiceName={voiceName}
+        setVoiceName={setVoiceName}
+        voices={voices}
+      />
+
       <main>
         <section className="hero hero-compact">
           <div className="eyebrow">Interactive learning lab</div>
-          <h1>See the number.<br /><span>Understand the number.</span></h1>
-          <p>{getModeTitle(mode)} Learn Indian place value from Ones all the way to Crore.</p>
+
+          <h1>
+            See the number.
+            <br />
+            <span>Understand the number.</span>
+          </h1>
+
+          <p>
+            Learn Indian place value from Ones all the way to Crore.
+          </p>
         </section>
 
         <section className="lab-card">
-          <div className="lab-topline">
-            <div>
-              <span className="lab-kicker">Current number</span>
-              <strong>{formatIndian(value)}</strong>
-            </div>
-            <div className="milestone">{value >= 10000000 ? "Crore" : value >= 100000 ? "Lakh" : value >= 1000 ? "Thousand" : value >= 100 ? "Hundreds" : value >= 10 ? "Tens" : "Ones"}</div>
-          </div>
+          <NumberDisplay
+            value={value}
+            previousValue={previousValue}
+            direction={direction}
+            speed={speed}
+            reducedMotion={reducedMotion}
+          />
 
-          <div className="mode-tabs">
-            <button className={mode === "place" ? "active" : ""} onClick={() => setMode("place")}>Place Value</button>
-            <button className={mode === "read" ? "active" : ""} onClick={() => setMode("read")}>Read & Say</button>
-            <button className={mode === "carry" ? "active" : ""} onClick={() => setMode("carry")}>Carry & Borrow</button>
-          </div>
-
-          <div className="number-progress" aria-label="Place value progression">
-            {PLACE_META.slice().reverse().map((place) => <span key={place.key} className={`progress-chip ${place.colorClass}`}>{place.label}</span>)}
-          </div>
-
-          <NumberDisplay value={value} direction={direction} speed={speed} reducedMotion={reducedMotion} />
+          <PlaceValueGrid
+            value={value}
+            changedPlaces={changedPlaces}
+          />
 
           <div className="pronunciation">
-            <span>{words}</span>
-            <button onClick={() => window.speechSynthesis?.speak(new SpeechSynthesisUtterance(words))} aria-label="Read number aloud">🔊</button>
-          </div>
+            <span className={language === "hi" ? "hindi-text" : ""}>
+              {words}
+            </span>
 
-          <VoicePanel language={language} words={words} speechRate={speechRate} setSpeechRate={setSpeechRate} />
-          <SpeedControl speed={speed} setSpeed={setSpeed} />
-          <PlaceValueGrid value={value} changedPlaces={changedPlaces} />
+            <button
+              type="button"
+              onClick={speakCurrentNumber}
+              aria-label="Read number aloud"
+              title="Read number aloud"
+            >
+              🔊
+            </button>
+          </div>
 
           <div className="lesson-area">
             <span>What just happened?</span>
             <strong>{message}</strong>
-            <small>{formatIndian(previousValue)} → {formatIndian(value)} · {language === "hi" ? indianNumberToHindiWords(value) : words}</small>
+            <small>
+              {formatIndian(previousValue)} → {formatIndian(value)} ·{" "}
+              {language === "hi"
+                ? indianNumberToHindiWords(value)
+                : words}
+            </small>
           </div>
 
           <div className="controls">
-            <button onClick={() => { stop(); step("previous"); }} disabled={value <= MIN}>← Previous</button>
-            <button className="primary" onClick={() => running ? stop() : start()}>{running ? "Pause" : "Start"}</button>
-            <button onClick={() => { stop(); step("next"); }} disabled={value >= MAX}>Next →</button>
-            <button className="ghost" onClick={reset}>Go to 0</button>
-          </div>
+            <button
+              type="button"
+              onClick={() => {
+                stop();
+                step("previous");
+              }}
+              disabled={value <= MIN}
+            >
+              ← Previous
+            </button>
 
-          <div className="status-row">
-            <span>{running ? `Running · ${getSpeedLabel(speed)} · ${Math.round(delay / 100) / 10}s per step` : value >= MAX ? "Complete" : "Paused"}</span>
-            <span>← → navigate · Space play/pause · Home reset</span>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => (running ? stop() : start())}
+            >
+              {running ? "Pause" : "Start"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                stop();
+                step("next");
+              }}
+              disabled={value >= MAX}
+            >
+              Next →
+            </button>
+
+            <button
+              type="button"
+              className="ghost"
+              onClick={reset}
+            >
+              Go to 0
+            </button>
           </div>
         </section>
       </main>
@@ -877,6 +1283,297 @@ const GAME_CONFIG = {
 
 const EMPTY_ORDER = [];
 
+const GAME_COPY = {
+  "number-to-words": {
+    en: {
+      gameType: "Number → Words",
+      title: "Type the number in words",
+      description: "Convert each Indian number into words.",
+      prompt: "Write this number in words",
+      voiceLabel: "🔊 Hear Number",
+      placeholder: "e.g. Twelve Lakh Thirty Four Thousand",
+      inputLabel: "Type the number in words",
+    },
+    hi: {
+      gameType: "संख्या → शब्द",
+      title: "संख्या को शब्दों में लिखें",
+      description: "हर भारतीय संख्या को सही शब्दों में बदलें।",
+      prompt: "इस संख्या को शब्दों में लिखें",
+      voiceLabel: "🔊 संख्या सुनें",
+      placeholder: "जैसे: बारह लाख चौंतीस हज़ार",
+      inputLabel: "संख्या को शब्दों में लिखें",
+    },
+  },
+  "words-to-number": {
+    en: {
+      gameType: "Words → Number",
+      title: "Write the words as digits",
+      description: "Convert the words back into digits.",
+      prompt: "Write this number in digits",
+      voiceLabel: "🔊 Hear it",
+      placeholder: "e.g. 7,34,22,435",
+      inputLabel: "Type the number in digits",
+    },
+    hi: {
+      gameType: "शब्द → संख्या",
+      title: "शब्दों को अंकों में लिखें",
+      description: "दिए गए शब्दों को वापस अंकों में बदलें।",
+      prompt: "इस संख्या को अंकों में लिखें",
+      voiceLabel: "🔊 सुनें",
+      placeholder: "जैसे: 7,34,22,435",
+      inputLabel: "संख्या को अंकों में लिखें",
+    },
+  },
+  "hear-type": {
+    en: {
+      gameType: "Hear & Type",
+      title: "Listen, then type",
+      description: "Hear the number and type it in digits.",
+      prompt: "Listen, then type the number",
+      voiceLabel: "🔊 Hear it",
+      placeholder: "e.g. 12,34,567",
+      inputLabel: "Type the number you hear",
+    },
+    hi: {
+      gameType: "सुनें और लिखें",
+      title: "सुनें, फिर लिखें",
+      description: "संख्या सुनें और उसे अंकों में लिखें।",
+      prompt: "सुनें और संख्या अंकों में लिखें",
+      voiceLabel: "🔊 सुनें",
+      placeholder: "जैसे: 12,34,567",
+      inputLabel: "सुनी हुई संख्या लिखें",
+    },
+  },
+  "place-value": {
+    en: {
+      gameType: "Place Value Builder",
+      title: "Find the value of a digit",
+      description: "Work out what a single digit is worth.",
+    },
+    hi: {
+      gameType: "स्थान-मूल्य",
+      title: "अंक का स्थान-मूल्य खोजें",
+      description: "जानें कि किसी अंक का सही स्थान-मूल्य क्या है।",
+    },
+  },
+  "guess-place": {
+    en: {
+      gameType: "Guess the Place",
+      title: "Name the place",
+      description: "Identify which place a digit belongs to.",
+    },
+    hi: {
+      gameType: "स्थान पहचानें",
+      title: "स्थान बताइए",
+      description: "पहचानें कि दिया गया अंक किस स्थान पर है।",
+    },
+  },
+  "carry": {
+    en: {
+      gameType: "Carry Challenge",
+      title: "Catch the carry",
+      description: "See what changes when a place reaches ten.",
+    },
+    hi: {
+      gameType: "कैरी चुनौती",
+      title: "कैरी को समझें",
+      description: "जानें कि किसी स्थान पर दस होने पर क्या बदलता है।",
+    },
+  },
+  order: {
+    en: {
+      gameType: "Number Order",
+      title: "Order the numbers",
+      description: "Build the order from smallest to largest.",
+    },
+    hi: {
+      gameType: "संख्या क्रम",
+      title: "संख्याओं को क्रम में लगाएँ",
+      description: "संख्याओं को सबसे छोटी से सबसे बड़ी तक लगाएँ।",
+    },
+  },
+  compare: {
+    en: {
+      gameType: "Number Compare",
+      title: "Compare the two numbers",
+      description: "Use place value to choose the right sign.",
+    },
+    hi: {
+      gameType: "संख्या तुलना",
+      title: "दो संख्याओं की तुलना करें",
+      description: "स्थान-मूल्य का उपयोग करके सही चिन्ह चुनें।",
+    },
+  },
+};
+
+const UI_COPY = {
+  en: {
+    game: "Game",
+    practice: "Practice",
+    numberLab: "Number Lab",
+    learnPlaceValue: "Learn place value",
+    controls: "Controls",
+    language: "Language",
+    english: "English",
+    hindi: "हिंदी",
+    difficulty: "Difficulty",
+    easy: "Easy",
+    medium: "Medium",
+    hard: "Hard",
+    expert: "Expert",
+    master: "Master",
+    mixed: "Mixed",
+    voice: "Voice",
+    browserDefault: "Browser default",
+    speechSpeed: "Speech speed",
+    score: "Score",
+    correct: "correct",
+    streak: "streak",
+    resetScore: "{getUiCopy(language).resetScore}",
+    nextQuestion: "Next Question →",
+    checkAnswer: "Check Answer",
+    tapSmallest: "Tap from smallest to largest",
+    correctTitle: "✓ Correct",
+    wrongTitle: "✕ You’re wrong",
+    excellent: "Excellent!",
+    yourAnswer: "Your answer",
+    correctAnswer: "Correct answer",
+    why: "Why",
+    scoreCanGoNegative: "score can go negative",
+    gameComplete: "Game complete",
+    points: "points",
+    accuracy: "accuracy",
+    wrong: "wrong",
+    bestStreak: "Best streak",
+    playAgain: "{getUiCopy(language).playAgain}",
+    backToLab: "{getUiCopy(language).backToLab}",
+    chooseAnother: "Choose another game",
+  },
+  hi: {
+    game: "गेम",
+    practice: "अभ्यास",
+    numberLab: "नंबर लैब",
+    learnPlaceValue: "स्थान-मूल्य सीखें",
+    controls: "कंट्रोल",
+    language: "भाषा",
+    english: "English",
+    hindi: "हिंदी",
+    difficulty: "कठिनाई",
+    easy: "आसान",
+    medium: "मध्यम",
+    hard: "कठिन",
+    expert: "विशेषज्ञ",
+    master: "मास्टर",
+    mixed: "मिश्रित",
+    voice: "आवाज़",
+    browserDefault: "ब्राउज़र डिफ़ॉल्ट",
+    speechSpeed: "बोलने की गति",
+    score: "स्कोर",
+    correct: "सही",
+    streak: "लगातार",
+    resetScore: "स्कोर रीसेट",
+    nextQuestion: "अगला प्रश्न →",
+    checkAnswer: "उत्तर जाँचें",
+    tapSmallest: "सबसे छोटी संख्या से चुनें",
+    correctTitle: "✓ सही",
+    wrongTitle: "✕ आपका उत्तर गलत है",
+    excellent: "बहुत बढ़िया!",
+    yourAnswer: "आपका उत्तर",
+    correctAnswer: "सही उत्तर",
+    why: "क्यों",
+    scoreCanGoNegative: "स्कोर नकारात्मक हो सकता है",
+    gameComplete: "गेम पूरा",
+    points: "अंक",
+    accuracy: "सटीकता",
+    wrong: "गलत",
+    bestStreak: "सबसे लंबी लगातार श्रृंखला",
+    playAgain: "फिर खेलें",
+    backToLab: "नंबर लैब पर जाएँ",
+    chooseAnother: "दूसरा गेम चुनें",
+  },
+};
+
+const GAME_MENU_COPY = {
+  en: {
+    "number-to-words": ["Number → Words", "Write numbers as words"],
+    "words-to-number": ["Words → Number", "Convert words to digits"],
+    "place-value": ["Place Value Builder", "Find the value of a digit"],
+    "guess-place": ["Guess the Place", "Identify the place"],
+    carry: ["Carry Challenge", "Understand regrouping"],
+    order: ["Number Order", "Smallest to largest"],
+    compare: ["Number Compare", "Choose <, > or ="],
+    "hear-type": ["Hear & Type", "Listen and type digits"],
+  },
+  hi: {
+    "number-to-words": ["संख्या → शब्द", "संख्या को शब्दों में लिखें"],
+    "words-to-number": ["शब्द → संख्या", "शब्दों को अंकों में बदलें"],
+    "place-value": ["स्थान-मूल्य", "अंक का मान खोजें"],
+    "guess-place": ["स्थान पहचानें", "अंक का स्थान बताएं"],
+    carry: ["कैरी चुनौती", "पुनर्गठन को समझें"],
+    order: ["संख्या क्रम", "छोटी से बड़ी"],
+    compare: ["संख्या तुलना", "<, > या = चुनें"],
+    "hear-type": ["सुनें और लिखें", "सुनकर संख्या लिखें"],
+  },
+};
+
+function getGameCopy(mode, language) {
+  return GAME_COPY[mode]?.[language] || GAME_COPY[mode]?.en || GAME_COPY["number-to-words"].en;
+}
+
+function getUiCopy(language) {
+  return UI_COPY[language] || UI_COPY.en;
+}
+
+function getLocalizedGameItems(language) {
+  const source = GAME_MENU_COPY[language] || GAME_MENU_COPY.en;
+  return GAME_ITEMS.map(([path]) => {
+    const mode = path.split("/").pop();
+    const [title, hint] = source[mode] || GAME_MENU_COPY.en[mode];
+    return [path, title, hint];
+  });
+}
+
+function getDifficultyLabel(difficulty, language) {
+  return getUiCopy(language)[difficulty] || difficulty;
+}
+
+function getQuestionPrompt(question, language) {
+  if (language === "hi") {
+    const prompts = {
+      "number-to-words": "इस संख्या को शब्दों में लिखें",
+      "words-to-number": "इस संख्या को अंकों में लिखें",
+      "hear-type": "सुनें और संख्या अंकों में लिखें",
+      "place-value": "इस अंक का स्थान-मूल्य बताइए",
+      "guess-place": `अंक ${question.targetDigit ?? ""} किस स्थान पर है?`,
+      carry: "स्थान-मूल्य में क्या बदलाव हुआ?",
+      order: "संख्याओं को छोटी से बड़ी क्रम में चुनें।",
+      compare: "सही चिन्ह चुनें।",
+    };
+    return prompts[question.type] || question.prompt;
+  }
+
+  return question.prompt;
+}
+
+function translatePlaceLabel(label, language) {
+  if (language !== "hi") return label;
+  return PLACE_META.find((place) => place.label === label)?.hindi || label;
+}
+
+function getLocalizedOption(question, option, language) {
+  if (language !== "hi") return option;
+  if (question.type === "guess-place") return translatePlaceLabel(option, language);
+  if (question.type === "carry") {
+    const map = {
+      "The number stayed in the same place.": "संख्या उसी स्थान पर रही।",
+      "10 Ones became 1 Thousand.": "10 इकाइयाँ 1 हज़ार बन गईं।",
+      "1 Hundred became 1 One.": "1 सैकड़ा 1 इकाई बन गया।",
+    };
+    return map[option] || option;
+  }
+  return option;
+}
+
 let questionCounter = 0;
 
 function makeQuestionId() {
@@ -948,8 +1645,9 @@ function answerDisplayOf(question, language) {
   return String(value);
 }
 
-function explainQuestion(question) {
+function explainQuestion(question, language = "en") {
   const type = question.type;
+
   if (type === "number-to-words" || type === "words-to-number" || type === "hear-type") {
     const number = question.number;
     const crore = Math.floor(number / 10000000);
@@ -957,18 +1655,44 @@ function explainQuestion(question) {
     const thousand = Math.floor(number / 1000) % 100;
     const rest = number % 1000;
     const parts = [];
-    if (crore) parts.push(`${formatIndian(crore)} is the Crore group.`);
-    if (lakh) parts.push(`${formatIndian(lakh)} is the Lakh group.`);
-    if (thousand) parts.push(`${formatIndian(thousand)} is the Thousand group.`);
-    if (rest) parts.push(`${formatIndian(rest)} is the Hundreds, Tens and Ones group.`);
+
+    if (language === "hi") {
+      if (crore) parts.push(`${formatIndian(crore)} करोड़ समूह है।`);
+      if (lakh) parts.push(`${formatIndian(lakh)} लाख समूह है।`);
+      if (thousand) parts.push(`${formatIndian(thousand)} हज़ार समूह है।`);
+      if (rest) parts.push(`${formatIndian(rest)} सैकड़ा, दहाई और इकाई का समूह है।`);
+    } else {
+      if (crore) parts.push(`${formatIndian(crore)} is the Crore group.`);
+      if (lakh) parts.push(`${formatIndian(lakh)} is the Lakh group.`);
+      if (thousand) parts.push(`${formatIndian(thousand)} is the Thousand group.`);
+      if (rest) parts.push(`${formatIndian(rest)} is the Hundreds, Tens and Ones group.`);
+    }
+
     return parts.join(" ");
   }
+
   if (type === "place-value") {
-    return `${question.targetDigit} sits in the ${question.targetPlace} place, so it is worth ${formatIndian(question.targetValue)}.`;
+    return language === "hi"
+      ? `${question.targetDigit} ${translatePlaceLabel(question.targetPlace, language)} स्थान पर है, इसलिए इसका मान ${formatIndian(question.targetValue)} है।`
+      : `${question.targetDigit} sits in the ${question.targetPlace} place, so it is worth ${formatIndian(question.targetValue)}.`;
   }
-  if (type === "guess-place") return `${question.answer} is the place where that digit lives.`;
-  if (type === "compare") return `${formatIndian(question.display[0])} ${question.answer} ${formatIndian(question.display[1])}.`;
-  if (type === "order") return `Smallest first: ${question.answer.map(formatIndian).join(" → ")}.`;
+
+  if (type === "guess-place") {
+    return language === "hi"
+      ? `${translatePlaceLabel(question.answer, language)} वह स्थान है जहाँ यह अंक है।`
+      : `${question.answer} is the place where that digit lives.`;
+  }
+
+  if (type === "compare") {
+    return `${formatIndian(question.display[0])} ${question.answer} ${formatIndian(question.display[1])}.`;
+  }
+
+  if (type === "order") {
+    return language === "hi"
+      ? `सबसे छोटी संख्या पहले: ${question.answer.map(formatIndian).join(" → ")}।`
+      : `Smallest first: ${question.answer.map(formatIndian).join(" → ")}.`;
+  }
+
   return "";
 }
 
@@ -1158,8 +1882,9 @@ function useGameSession({ mode, language, difficulty, config }) {
   };
 }
 
-function ScorePanel({ score, correct, total, streak, tone }) {
+function ScorePanel({ score, correct, total, streak, tone, language = "en" }) {
   const reducedMotion = useReducedMotion();
+  const ui = getUiCopy(language);
   const up = tone === "up";
   const initial = reducedMotion
     ? false
@@ -1170,7 +1895,7 @@ function ScorePanel({ score, correct, total, streak, tone }) {
       };
   return (
     <aside className="score-panel" aria-live="polite">
-      <span className="score-kicker">Score</span>
+      <span className="score-kicker">{ui.score}</span>
       <strong className="score-value">
         <motion.span
           key={score}
@@ -1188,7 +1913,8 @@ function ScorePanel({ score, correct, total, streak, tone }) {
   );
 }
 
-function GameHeader({ config }) {
+function GameHeader({ config, language }) {
+  const ui = getUiCopy(language);
   return (
     <div className="game-hero">
       <div className="game-hero-copy">
@@ -1214,19 +1940,24 @@ function VoiceButton({ speaking, label, onSpeak, onStop }) {
   );
 }
 
-function VoiceSettings({ open, onToggle, onClose, language, setLanguage, suitableVoices, voiceName, setVoiceName, rate, setRate }) {
+function VoiceSettings({ open, onToggle, onClose, language, suitableVoices, voiceName, setVoiceName, rate, setRate }) {
   const wrapRef = useRef(null);
+  const ui = getUiCopy(language);
 
   useEffect(() => {
     if (!open) return undefined;
+
     const onPointer = (event) => {
       if (wrapRef.current && !wrapRef.current.contains(event.target)) onClose();
     };
+
     const onKey = (event) => {
       if (event.key === "Escape") onClose();
     };
+
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
+
     return () => {
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
@@ -1235,9 +1966,16 @@ function VoiceSettings({ open, onToggle, onClose, language, setLanguage, suitabl
 
   return (
     <div className="voice-settings" ref={wrapRef}>
-      <button type="button" className="voice-settings-btn" onClick={onToggle} aria-expanded={open}>
-        Voice
+      <button
+        type="button"
+        className="voice-settings-btn"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+      >
+        {ui.voice}
       </button>
+
       <AnimatePresence>
         {open && (
           <motion.div
@@ -1245,23 +1983,19 @@ function VoiceSettings({ open, onToggle, onClose, language, setLanguage, suitabl
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.18, ease: EASE }}
+            role="dialog"
+            aria-label={ui.voice}
           >
-            <div className="voice-pop-row">
-              <span>Language</span>
-              <div className="mini-lang">
-                <button type="button" className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>
-                  English
-                </button>
-                <button type="button" className={language === "hi" ? "active" : ""} onClick={() => setLanguage("hi")}>
-                  हिंदी
-                </button>
-              </div>
+            <div className="voice-pop-heading">
+              <span>{ui.voice}</span>
+              <strong>{language === "hi" ? "हिंदी" : "English"}</strong>
             </div>
+
             <div className="voice-pop-row">
-              <span>Voice</span>
-              <select value={voiceName} onChange={(event) => setVoiceName(event.target.value)} aria-label="Voice">
-                <option value="">Browser default</option>
+              <span>{ui.voice}</span>
+              <select value={voiceName} onChange={(event) => setVoiceName(event.target.value)} aria-label={ui.voice}>
+                <option value="">{ui.browserDefault}</option>
                 {suitableVoices.map((voice) => (
                   <option key={`${voice.name}-${voice.lang}`} value={voice.name}>
                     {voice.name} · {voice.lang}
@@ -1269,8 +2003,9 @@ function VoiceSettings({ open, onToggle, onClose, language, setLanguage, suitabl
                 ))}
               </select>
             </div>
+
             <div className="voice-pop-row">
-              <span>Speech speed</span>
+              <span>{ui.speechSpeed}</span>
               <div className="rate-pills">
                 {[0.6, 0.8, 1, 1.2].map((value) => (
                   <button
@@ -1291,51 +2026,45 @@ function VoiceSettings({ open, onToggle, onClose, language, setLanguage, suitabl
   );
 }
 
-function GameControls({ mode, config, language, setLanguage, difficulty, setDifficulty, voiceSlot }) {
+function GameControls({ mode, config, language, difficulty, setDifficulty, voiceSlot }) {
   const isTextPair = mode === "number-to-words" || mode === "words-to-number";
+  const ui = getUiCopy(language);
   return (
     <div className="game-toolbar">
       <div className="segmented">
         {isTextPair ? (
           <>
             <Link className={mode === "number-to-words" ? "active" : ""} to="/game/number-to-words">
-              Number → Words
+              {language === "hi" ? "संख्या → शब्द" : "Number → Words"}
             </Link>
             <Link className={mode === "words-to-number" ? "active" : ""} to="/game/words-to-number">
-              Words → Number
+              {language === "hi" ? "शब्द → संख्या" : "Words → Number"}
             </Link>
           </>
         ) : (
           <span className="seg-chip">{config.gameType}</span>
         )}
       </div>
+
       <div className="game-settings">
         <label className="sr-field">
-          <span>Difficulty</span>
-          <select value={difficulty} onChange={(event) => setDifficulty(event.target.value)} aria-label="Difficulty">
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-            <option value="expert">Expert</option>
-            <option value="master">Master</option>
-            <option value="mixed">Mixed</option>
+          <span>{ui.difficulty}</span>
+          <select value={difficulty} onChange={(event) => setDifficulty(event.target.value)} aria-label={ui.difficulty}>
+            <option value="easy">{ui.easy}</option>
+            <option value="medium">{ui.medium}</option>
+            <option value="hard">{ui.hard}</option>
+            <option value="expert">{ui.expert}</option>
+            <option value="master">{ui.master}</option>
+            <option value="mixed">{ui.mixed}</option>
           </select>
         </label>
-        <div className="mini-lang" aria-label="Language">
-          <button type="button" className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>
-            EN
-          </button>
-          <button type="button" className={language === "hi" ? "active" : ""} onClick={() => setLanguage("hi")}>
-            हिं
-          </button>
-        </div>
         {voiceSlot}
       </div>
     </div>
   );
 }
 
-function QuestionStage({ config, question, language, reducedMotion, gameState, onPick, selectedOrder, answer, locked, answered, voice }) {
+function QuestionStage({ mode, config, question, language, reducedMotion, gameState, onPick, selectedOrder, answer, locked, answered, voice }) {
   const isText = config.answerType === "text";
   const rawDisplay = question.display ?? (question.number != null ? formatIndian(question.number) : "");
   const isWords = config.displayKind === "words";
@@ -1355,7 +2084,7 @@ function QuestionStage({ config, question, language, reducedMotion, gameState, o
 
   return (
     <div className="question-stage">
-      {isText ? <span className="q-label">{config.prompt}</span> : <p className="q-question">{question.prompt}</p>}
+      {isText ? <span className="q-label">{config.prompt}</span> : <p className="q-question">{getQuestionPrompt(question, language)}</p>}
 
       {showValue || config.voice ? (
         <div className="q-value-wrap">
@@ -1397,7 +2126,7 @@ function QuestionStage({ config, question, language, reducedMotion, gameState, o
               onClick={() => onPick(String(option))}
               disabled={frozen}
             >
-              {option}
+              {getLocalizedOption(question, option, language)}
             </button>
           ))}
         </div>
@@ -1413,7 +2142,7 @@ function QuestionStage({ config, question, language, reducedMotion, gameState, o
                 </span>
               ))
             ) : (
-              <small>Tap from smallest to largest</small>
+              <small>{getUiCopy(language).tapSmallest}</small>
             )}
           </div>
           <div className="order-options">
@@ -1429,11 +2158,11 @@ function QuestionStage({ config, question, language, reducedMotion, gameState, o
   );
 }
 
-function AnswerFeedback({ state, question, streak, correctAnswer, yourAnswer }) {
+function AnswerFeedback({ state, question, streak, correctAnswer, yourAnswer, language = "en" }) {
   const answered = state === GAME_STATES.CORRECT || state === GAME_STATES.WRONG;
   const isCorrect = state === GAME_STATES.CORRECT;
-  const explanation = answered && !isCorrect ? explainQuestion(question) : "";
-  const correctNote = answered && isCorrect ? explainQuestion(question) : "";
+  const explanation = answered && !isCorrect ? explainQuestion(question, language) : "";
+  const correctNote = answered && isCorrect ? explainQuestion(question, language) : "";
   const showExplanation = explanation && explanation !== correctAnswer;
   const contentKey = answered ? `${state}-${question.id}` : "idle";
 
@@ -1447,26 +2176,26 @@ function AnswerFeedback({ state, question, streak, correctAnswer, yourAnswer }) 
         transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
       >
         {!answered ? (
-          <span className="fb-hint">+10 correct · −5 wrong · streak {streak} · score can go negative</span>
+          <span className="fb-hint">+10 {getUiCopy(language).correct} · −5 {getUiCopy(language).wrong} · {getUiCopy(language).streak} {streak} · {getUiCopy(language).scoreCanGoNegative}</span>
         ) : isCorrect ? (
           <>
-            <strong className="fb-title">✓ Correct</strong>
+            <strong className="fb-title">{getUiCopy(language).correctTitle}</strong>
             <span className="fb-delta">+10</span>
-            <span className="fb-note">{correctNote || "Excellent!"}</span>
+            <span className="fb-note">{correctNote || getUiCopy(language).excellent}</span>
           </>
         ) : (
           <>
-            <strong className="fb-title">✕ You’re wrong</strong>
+            <strong className="fb-title">{getUiCopy(language).wrongTitle}</strong>
             <span className="fb-delta">−5</span>
             {yourAnswer ? (
               <span className="fb-yours">
-                Your answer: <b>{yourAnswer}</b>
+                {getUiCopy(language).yourAnswer}: <b>{yourAnswer}</b>
               </span>
             ) : null}
             <span className="fb-correct">
-              Correct answer: <b>{correctAnswer}</b>
+              {getUiCopy(language).correctAnswer}: <b>{correctAnswer}</b>
             </span>
-            {showExplanation ? <span className="fb-why">Why: {explanation}</span> : null}
+            {showExplanation ? <span className="fb-why">{getUiCopy(language).why}: {explanation}</span> : null}
           </>
         )}
       </motion.div>
@@ -1474,7 +2203,7 @@ function AnswerFeedback({ state, question, streak, correctAnswer, yourAnswer }) 
   );
 }
 
-function GameProgress({ questionNumber, total, difficulty, streak, onReset }) {
+function GameProgress({ questionNumber, total, difficulty, streak, onReset, language = "en" }) {
   const percent = Math.round((questionNumber / total) * 100);
   return (
     <div className="game-footer">
@@ -1483,7 +2212,7 @@ function GameProgress({ questionNumber, total, difficulty, streak, onReset }) {
         <strong>{difficulty}</strong>
       </div>
       <div className="gf-item gf-progress">
-        <span>Question</span>
+        <span>{language === "hi" ? "प्रश्न" : "Question"}</span>
         <strong>
           {questionNumber} / {total}
         </strong>
@@ -1492,7 +2221,7 @@ function GameProgress({ questionNumber, total, difficulty, streak, onReset }) {
         </div>
       </div>
       <div className="gf-item">
-        <span>Streak</span>
+        <span>{getUiCopy(language).streak}</span>
         <strong>{streak}</strong>
       </div>
       <button type="button" className="gf-reset" onClick={onReset}>
@@ -1502,26 +2231,26 @@ function GameProgress({ questionNumber, total, difficulty, streak, onReset }) {
   );
 }
 
-function GameComplete({ score, correct, wrong, best, total, onAgain, mode }) {
+function GameComplete({ score, correct, wrong, best, total, onAgain, mode, language = "en" }) {
   const accuracy = total ? Math.round((correct / total) * 100) : 0;
   return (
     <div className="game-done">
-      <div className="eyebrow">Game complete</div>
+      <div className="eyebrow">{getUiCopy(language).gameComplete}</div>
       <motion.strong
         className="done-score"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        {score} points
+        {score} {getUiCopy(language).points}
       </motion.strong>
       <div className="done-stats">
         <span>
           {correct} / {total} correct
         </span>
-        <span>{accuracy}% accuracy</span>
-        <span>{wrong} wrong</span>
-        <span>Best streak {best}</span>
+        <span>{accuracy}% {getUiCopy(language).accuracy}</span>
+        <span>{wrong} {getUiCopy(language).wrong}</span>
+        <span>{getUiCopy(language).bestStreak} {best}</span>
       </div>
       <div className="done-actions">
         <button type="button" className="primary" onClick={onAgain}>
@@ -1530,9 +2259,9 @@ function GameComplete({ score, correct, wrong, best, total, onAgain, mode }) {
         <Link to="/">Back to Number Lab</Link>
       </div>
       <div className="done-more">
-        <span>Choose another game</span>
+        <span>{getUiCopy(language).chooseAnother}</span>
         <div className="done-links">
-          {GAME_ITEMS.filter(([path]) => !path.endsWith(mode)).map(([path, title]) => (
+          {getLocalizedGameItems(language).filter(([path]) => !path.endsWith(mode)).map(([path, title]) => (
             <Link key={path} to={path}>
               {title}
             </Link>
@@ -1552,6 +2281,7 @@ function GamePage({ mode }) {
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceName, setVoiceName] = useState("");
   const [speechRate, setSpeechRate] = useState(0.8);
+  const localizedConfig = useMemo(() => ({ ...config, ...getGameCopy(mode, language) }), [config, language, mode]);
 
   const { suitableVoices, speak, stop, speaking } = useVoice({ language, rate: speechRate, voiceName });
 
@@ -1642,7 +2372,7 @@ function GamePage({ mode }) {
   };
 
   const voiceButton = config.voice ? (
-    <VoiceButton speaking={speaking} label={config.voiceLabel} onSpeak={() => speak(speechText)} onStop={stop} />
+    <VoiceButton speaking={speaking} label={localizedConfig.voiceLabel} onSpeak={() => speak(speechText)} onStop={stop} />
   ) : null;
 
   if (gameState === GAME_STATES.COMPLETE) {
@@ -1650,7 +2380,7 @@ function GamePage({ mode }) {
       <div className="page game-page">
         <Header language={language} setLanguage={setLanguage} />
         <main>
-          <GameHeader config={config} />
+          <GameHeader config={localizedConfig} language={language} />
           <div className="score-rail">
             <ScorePanel
               score={score}
@@ -1694,9 +2424,9 @@ function GamePage({ mode }) {
         />
       ) : null}
       <main>
-        <GameHeader config={config} />
+        <GameHeader config={localizedConfig} language={language} />
         <div className="score-rail">
-          <ScorePanel score={score} correct={correctCount} total={totalQuestions} streak={streak} tone={tone} />
+          <ScorePanel language={language} score={score} correct={correctCount} total={totalQuestions} streak={streak} tone={tone} />
         </div>
 
         <section className={`game-card state-${gameState}`}>
@@ -1704,8 +2434,7 @@ function GamePage({ mode }) {
             mode={mode}
             config={config}
             language={language}
-            setLanguage={setLanguage}
-            difficulty={difficulty}
+                        difficulty={difficulty}
             setDifficulty={setDifficulty}
             voiceSlot={
               <VoiceSettings
@@ -1760,8 +2489,8 @@ function GamePage({ mode }) {
                       if (event.key === "Enter" && canCheck) handleCheck();
                     }}
                     className={gameState === GAME_STATES.WRONG ? "error-input" : gameState === GAME_STATES.CORRECT ? "success-input" : ""}
-                    placeholder={config.placeholder}
-                    aria-label={config.inputLabel}
+                    placeholder={localizedConfig.placeholder}
+                    aria-label={localizedConfig.inputLabel}
                     disabled={answered || locked}
                     autoComplete="off"
                     spellCheck="false"

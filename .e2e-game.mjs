@@ -24,7 +24,7 @@ function connect(url) {
   return new Promise((resolve, reject) => {
     ws = new WebSocket(url);
     ws.onopen = resolve;
-    ws.onerror = (e) => reject(new Error("ws error"));
+    ws.onerror = () => reject(new Error("ws error"));
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
       if (msg.method === "Runtime.exceptionThrown") {
@@ -66,7 +66,7 @@ async function waitFor(expression, timeout = 9000, label = expression) {
     try {
       const v = await evaluate(expression);
       if (v) return v;
-    } catch (e) {
+    } catch {
       /* page may be mid-navigation */
     }
     await sleep(120);
@@ -142,7 +142,13 @@ async function main() {
   const inputVal = await evaluate(`${Q(".answer-row input")}.value`);
   const scoreB = await evaluate(`${Q(".score-value")}.textContent.trim()`);
   check("A9 NEW question id/content", n2 !== n1, `${n1} -> ${n2}`);
-  check("A10 feedback reset to idle", fbState === "idle", `state=${fbState}`);
+  check(
+    "A10 feedback reset to idle",
+    (await evaluate(`document.querySelector('.game-feedback')?.dataset.state`)) === "answering" &&
+      (await evaluate(`!!${Q(".fb-hint")}`)) === true &&
+      (await evaluate(`!!${Q(".fb-title")}`)) === false,
+    `state=${fbState}`,
+  );
   check("A11 answer input reset", inputVal === "", `value="${inputVal}"`);
   check("A12 score preserved across next", scoreB === scoreBeforeNext, `score=${scoreB}`);
   check(
@@ -256,10 +262,20 @@ async function main() {
     const panel = ${Q(".score-panel")};
     const cs = getComputedStyle(rail);
     const r = panel.getBoundingClientRect();
-    return { position: cs.position, top: cs.top, rightGap: Math.round(window.innerWidth - r.right) };
+    const pageRight = document.querySelector('.page').getBoundingClientRect().right;
+    return {
+      position: cs.position,
+      top: cs.top,
+      pageGap: Math.round(pageRight - r.right),
+      viewportGap: Math.round(window.innerWidth - r.right),
+    };
   })()`);
   check("D0a score rail position is sticky", railInfo.position === "sticky", JSON.stringify(railInfo));
-  check("D0b score pinned to top right", railInfo.rightGap <= 30, `gap from right edge=${railInfo.rightGap}px`);
+  check(
+    "D0b score aligned to top-right of content",
+    Math.abs(railInfo.pageGap) <= 4,
+    `gap to content right edge=${railInfo.pageGap}px (viewport gutter=${railInfo.viewportGap}px)`,
+  );
   await evaluate("window.scrollTo(0, 900)");
   await sleep(400);
   const stuckY = await evaluate(`Math.round(${Q(".score-panel")}.getBoundingClientRect().top)`);
