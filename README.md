@@ -36,3 +36,5 @@ npm run build
 ```
 
 The project intentionally does not include `node_modules` in the ZIP. Run `npm install` after extracting it.
+
+
